@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct HourglassState<T, U, V> {
     pub ticking: T,
     pub remaining_seconds: U,

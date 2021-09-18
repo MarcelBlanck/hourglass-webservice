@@ -2,9 +2,10 @@ use crate::hourglass_state::HourglassState;
 
 use actix_web::{web, App, HttpResponse, HttpRequest, HttpServer, Responder, rt::System};
 use actix_web::dev::Server;
-use std::{thread};
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use std::sync::Mutex;
+use std::thread;
+use actix_files::Files;
 
 pub struct WebServiceIO {
     pub server_control: actix_web::dev::Server,
@@ -30,23 +31,21 @@ pub fn start_webservice() -> WebServiceIO {
     let (web_service_tx, web_service_rx) = unbounded::<HourglassState<bool, u16, bool>>();
     let (control_extraction_tx, control_extraction_rx) = unbounded::<Server>();
 
-    let hourglass_service_state = web::Data::new(
-        WebServiceData {
-            hourglass_state: HourglassState::new(
-                Mutex::new(false),
-                Mutex::new(1200u16),
-                Mutex::new(false)
-            ),
-            tx: web_service_tx
-        }
-    );
-
     thread::spawn(move || {
         let sys = System::new("http-server");
 
         let server = HttpServer::new(move || {
             App::new()
-                .app_data(hourglass_service_state.clone())
+                .app_data(web::Data::new(
+                    WebServiceData {
+                        hourglass_state: HourglassState::new(
+                            Mutex::new(false),
+                            Mutex::new(1200u16),
+                            Mutex::new(false)
+                        ),
+                        tx: web_service_tx.clone()
+                    }
+                ))
                 .route("/", web::get().to(index))
                 .route("/start", web::get().to(start))
                 .route("/stop", web::get().to(stop))
@@ -56,12 +55,13 @@ pub fn start_webservice() -> WebServiceIO {
                 .route("/get_remaining_seconds", web::get().to(get_remaining_seconds))
                 .route("/set_remaining_seconds/{seconds}", web::get().to(set_remaining_seconds))
                 .route("/end_service", web::get().to(end_service))
+                .service(Files::new("/", "html/"))
         })
         .bind(("0.0.0.0", 8080))
         .unwrap()
         .run();
 
-        let _ = control_extraction_tx.send(server);
+        control_extraction_tx.send(server).unwrap();
         sys.run()
     });
 
@@ -73,29 +73,10 @@ pub fn start_webservice() -> WebServiceIO {
     }
 }
 
-async fn index(_data: web::Data<WebServiceData>) -> impl Responder {
-    HttpResponse::Ok()
-        .content_type("text/html")
-        .body(
-            r#"
-            <!DOCTYPE html>
-            <html>
-            <body>
-            <h1>Hourglass Control</h1>
-            <form action="/action_page.php" method="get" id="nameform">
-              <label for="ftime">Time (hh:mm:ss):</label>
-              <input type="text" id="ftime" name="ftime" value="00:20:00">
-            </form>
-            <br>
-            <button type="submit" form="nameform" value="Start">Start</button>
-            <button type="submit" form="nameform" value="Stop">Stop</button>
-            <br><br>
-            <button type="submit" form="nameform" value="-1">-1</button>
-            <button type="submit" form="nameform" value="1">+1</button>
-            </body>
-            </html>
-            "#,
-        )
+async fn index(_data: web::Data<WebServiceData>) -> HttpResponse {
+    HttpResponse::Found()
+        .header("LOCATION", "/index.html")
+        .finish()
 }
 
 async fn start(data: web::Data<WebServiceData>) -> impl Responder {

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Hourglass Control</h1>
+
+    <label>Time (hh:mm:ss): </label>
+    <input type="text" id="time" value="00:20:00">
+    <button onclick="setRemainingTime()">Set</button>
+
+    <br><br>
+    <button onclick="action('start')">Start</button>
+    <button onclick="action('stop')">Stop</button>
+
+    <br><br>
+
+    <button onclick="action('minus_minute')">+1</button>
+    <button onclick="action('plus_minute')">-1</button>
+
+<script>
+    async function action(name) {
+        await fetch("/" + name)
+    }
+
+    async function setRemainingTime() {
+        try {
+            const hms = document.getElementById("time").value
+                .split(':')
+                .map(text => parseInt(text));
+
+            if (hms.length !== 3 || hms.some(num => Number.isNaN(num))) {
+                throw "Wrong number format, please use hh:mm:ss.";
+            }
+
+            const seconds = hms[0] * 3600 + hms[1] * 60 + hms[2];
+            await fetch("/set_remaining_seconds/" + seconds);
+        } catch (e) {
+            alert("Unable to set time: " + e);
+            document.getElementById("time").value = "00:20:00";
+        }
+    }
+</script>
+
+</body>
+</html>
+
